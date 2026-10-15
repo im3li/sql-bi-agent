@@ -1,177 +1,237 @@
-# 📊 Conversational SQL & Automated BI Agent
+# Conversational SQL & Automated BI Agent
 
-> Talk to your database in plain English. Get the SQL, the data, and a chart — safely.
+A text-to-SQL and automated business-intelligence agent. Ask questions in plain English, review
+the generated SQL, run it safely against a local SQLite database, and get an interactive chart
+back — all in a single Streamlit app.
 
-An opinionated reference implementation of a **text-to-SQL + automated BI** agent built with
-**Streamlit**, **LangChain**, **Plotly**, and **SQLite**.
+Built with **Streamlit**, **LangChain**, **Plotly**, and **SQLite**.
 
-[![CI](https://github.com/YOUR_USERNAME/sql-bi-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/sql-bi-agent/actions/workflows/ci.yml)
+[![CI](https://github.com/im3li/sql-bi-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/im3li/sql-bi-agent/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
-## ✨ Features
+## Overview
+
+The app converts a natural-language question into a SQLite `SELECT` statement using an
+LLM, validates the SQL against a strict guardrail, executes it against a local database, and
+renders the result as a data table and an auto-selected Plotly chart.
+
+The default provider is [Groq](https://console.groq.com) (free tier available), but any
+OpenAI-compatible endpoint works — OpenAI, Azure OpenAI, Google Gemini, Ollama, vLLM, and
+others. The provider is selected from a dropdown in the sidebar.
+
+---
+
+## Features
 
 | Capability | Description |
 |------------|-------------|
-| 🗣️ **Conversational text-to-SQL** | Ask natural-language questions; an LLM writes SQLite SQL for you. |
-| 🛡️ **Guardrail-first execution** | SELECT-only enforcement + keyword blocklist (`DROP`, `DELETE`, `UPDATE`, …). |
-| 🔍 **Transparent queries** | Every answer shows the generated SQL in an expander. |
-| 📈 **Auto-charting** | Detects numeric / date / categorical columns and picks bar, line, or scatter. |
-| 🧠 **Conversational memory** | Follow-up questions reuse recent context. |
-| 💾 **CSV export** | Download any result set with one click. |
-| 🔌 **Provider-agnostic** | Works with OpenAI, Azure OpenAI, Ollama, vLLM, or any OpenAI-compatible endpoint. |
+| Conversational text-to-SQL | Natural-language questions are translated to SQLite SQL by an LLM. |
+| Strict SQL guardrail | Only `SELECT` / `WITH` statements are permitted; destructive keywords are blocked. |
+| Query transparency | Every answer exposes the exact SQL that was run, in a collapsible panel. |
+| Automatic charts | Column types are inspected and an appropriate Plotly chart (bar, line, or scatter) is chosen. |
+| Follow-up suggestions | After each answer, three context-aware follow-up questions are generated for one-click drilling. |
+| Query history | The last ten questions are kept in the sidebar and can be re-run with one click. |
+| Result controls | Adjustable row limit per query; per-result CSV download; full session export as JSON. |
+| Provider-agnostic | Works with Groq, OpenAI, Azure OpenAI, Google Gemini, Ollama, vLLM, or any OpenAI-compatible endpoint. |
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 flowchart LR
-    A["👤 User\n(plain English)"] --> B["🖥️ Streamlit UI\napp.py"]
-    B --> C["🛡️ Guardrail\nvalidate_sql()"]
-    C -->|invalid| X["🚫 Rejected"]
-    C -->|valid SQL| D["🗄️ SQLite\ndata/sample_store.db"]
-    B --> E["🧠 LLM Adapter\nsrc/agent.py"]
+    A["User\n(plain English)"] --> B["Streamlit UI\napp.py"]
+    B --> C["Guardrail\nvalidate_sql()"]
+    C -->|invalid| X["Rejected"]
+    C -->|valid SQL| D["SQLite\ndata/sample_store.db"]
+    B --> E["LLM adapter\nsrc/agent.py"]
     E -->|schema + prompt| D
-    D -->|rows| F["📊 Auto-Chart\nPlotly (bar / line / scatter)"]
+    D -->|rows| F["Auto-chart\nPlotly (bar / line / scatter)"]
     F --> B
     D --> B
 ```
 
 ### Request lifecycle
 
-1. **User prompt** enters the Streamlit chat input.
-2. **Schema introspection** (`PRAGMA table_info` + sample rows) is injected into the system prompt.
-3. **LLM** (`src/agent.py`) returns a candidate SQL statement.
-4. **Guardrail** (`src/guardrails.py`) rejects anything that is not `SELECT` / `WITH`
-   or contains forbidden keywords.
-5. **SQLite** executes the read-only query and returns a `pandas.DataFrame`.
-6. **Chart selector** profiles the DataFrame's dtypes and renders an appropriate Plotly figure.
-7. **UI** displays the SQL, the data preview, the chart, and a CSV download button.
+1. The user submits a question via the Streamlit chat input.
+2. The database schema (via `PRAGMA table_info`) and a few sample rows are embedded in the system prompt.
+3. The LLM (`src/agent.py`) returns a candidate SQLite query.
+4. The guardrail (`src/guardrails.py`) rejects anything that is not a single `SELECT` or `WITH`
+   statement or that contains forbidden keywords.
+5. SQLite executes the read-only query and returns a `pandas.DataFrame`.
+6. Column types are profiled and an appropriate Plotly chart is rendered.
+7. The UI displays the SQL, a data preview, the chart, and a CSV download button.
 
 ---
 
-## 📁 Project structure
+## Project structure
 
 ```
 sql-bi-agent/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml              # Lint + syntax-check GitHub Action
+│       └── ci.yml              # GitHub Actions: ruff lint + syntax check
+├── .streamlit/
+│   └── config.toml             # Streamlit internal theme (dark base)
+├── assets/
+│   └── logo.png                # Favicon + sidebar brand mark
 ├── data/
-│   └── .gitkeep                # sample_store.db lives here at runtime (gitignored)
+│   ├── .gitkeep
+│   └── sample_store.db         # Pre-seeded demo database (committed for deployment)
 ├── src/
 │   ├── __init__.py
-│   ├── database.py             # Connection, schema, seeding, queries
-│   ├── guardrails.py           # SQL safety validator
-│   └── agent.py                # LLM text-to-SQL + auto-chart
+│   ├── agent.py                # LLM text-to-SQL + automatic chart selection
+│   ├── database.py             # Connection, schema introspection, query execution
+│   └── guardrails.py           # SQL safety validator
 ├── .gitignore
-├── init_db.py                  # CLI: seed the SQLite database
+├── app.py                      # Streamlit entry point
+├── init_db.py                  # CLI: create and seed the SQLite database
+├── pyproject.toml              # Ruff configuration
 ├── requirements.txt
-├── app.py                      # Streamlit entrypoint
 └── README.md
 ```
 
 ---
 
-## 🚀 Quickstart
+## Quickstart
+
+### Prerequisites
+
+- Python 3.10 or higher
+- A free API key from [Groq](https://console.groq.com/keys) (recommended) or any
+  OpenAI-compatible provider
+
+### Local setup
 
 ```bash
-# 1) Clone
-git clone https://github.com/YOUR_USERNAME/sql-bi-agent.git
+# 1. Clone the repository
+git clone https://github.com/im3li/sql-bi-agent.git
 cd sql-bi-agent
 
-# 2) Install dependencies (use a venv)
+# 2. Create and activate a virtual environment
 python -m venv venv
-source venv/bin/activate         # Windows: venv\Scripts\activate
+source venv/bin/activate          # Windows: venv\Scripts\activate
+
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# 3) Create & seed the sample SQLite database
+# 4. Create and seed the sample database
 python init_db.py
 
-# 4) Launch the app
+# 5. Launch the app
 streamlit run app.py
 ```
 
-Open the URL Streamlit prints (default `http://localhost:8501`), paste your OpenAI API key
-in the sidebar, and start asking questions.
+Open the URL Streamlit prints (default: `http://localhost:8501`), select a provider in the
+sidebar, paste your API key, and start asking questions.
 
----
+### API key configuration
 
-## 🧪 Example questions
+You can provide the API key in one of three ways, in order of priority:
 
-- *What are the top 10 best-selling products by total revenue?*
-- *Show monthly revenue trend for 2023.*
-- *Which countries have the most customers?*
-- *Average order value by product category.*
-- *Top 5 customers by total spend.*
-- *Distribution of order statuses.*
+1. **Sidebar** — paste it into the *API Key* field. Stored only in session state.
+2. **Environment variable** — export `GROQ_API_KEY` or `OPENAI_API_KEY` before launching.
+3. **Streamlit secrets** — create `.streamlit/secrets.toml`:
 
----
-
-## 🔒 Security model
-
-The guardrail in `src/guardrails.py::validate_sql` enforces four rules:
-
-1. Query must be non-empty.
-2. Exactly one statement (no stacked `;` injections).
-3. Must start with `SELECT` or `WITH`.
-4. Must not contain any of: `DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, `CREATE`,
-   `TRUNCATE`, `REPLACE`, `ATTACH`, `DETACH`, `PRAGMA`, `VACUUM`, `GRANT`, `REVOKE`,
-   `EXEC`, `EXECUTE`, `MERGE`, `CALL`, `BEGIN`, `COMMIT`.
-
-> ⚠️ **Production hardening tips**
-> - Connect with a **read-only** database user (or a replica / warehouse role).
-> - Add a **query timeout** and keep the **row cap** (2 000 rows by default).
-> - Log every generated SQL for audit.
-> - Add **Row-Level Security** if your backing store supports it.
-
----
-
-## ☁️ Deploy on Streamlit Community Cloud
-
-1. Push this repo to GitHub (public).
-2. Go to <https://share.streamlit.io> → **New app**.
-3. Select your repo, branch `main`, main file `app.py`.
-4. In **Advanced settings → Secrets**, add:
    ```toml
-   OPENAI_API_KEY = "sk-..."
+   GROQ_API_KEY  = "gsk_..."
+   GROQ_API_BASE = "https://api.groq.com/openai/v1"
+   GROQ_MODEL    = "openai/gpt-oss-120b"
    ```
-   The app reads `OPENAI_API_KEY` from `st.secrets` automatically if the sidebar is empty.
-5. **Important:** Since the SQLite DB is gitignored, add a one-line bootstrap to your
-   deployment or commit a pre-built `data/sample_store.db`. The simplest option is to
-   run `python init_db.py` once locally, then force-add the file:
+
+   This file is git-ignored and never uploaded.
+
+---
+
+## Example questions
+
+- What are the top 5 best-selling products by total revenue?
+- Show monthly revenue trend for 2023.
+- Which countries have the most customers?
+- What is the average order value by product category?
+- Who are the top 5 customers by total spend?
+- Show the distribution of order statuses.
+
+---
+
+## Security model
+
+The SQL guardrail (`src/guardrails.py::validate_sql`) enforces four rules:
+
+1. The query must be non-empty.
+2. Exactly one statement is allowed (no stacked `;` injections).
+3. The query must begin with `SELECT` or `WITH`.
+4. The following keywords are blocked entirely: `DROP`, `DELETE`, `UPDATE`, `INSERT`,
+   `ALTER`, `CREATE`, `TRUNCATE`, `REPLACE`, `ATTACH`, `DETACH`, `PRAGMA`, `VACUUM`,
+   `GRANT`, `REVOKE`, `EXEC`, `EXECUTE`, `MERGE`, `CALL`, `BEGIN`, `COMMIT`.
+
+### Production hardening
+
+The guardrail blocks the most common attack vectors, but for a real deployment you should
+also:
+
+- Connect using a **read-only** database user, or point at a replica.
+- Enforce a **query timeout** at the database level.
+- Keep the application-level **row cap** (default 2 000 rows).
+- Log every generated SQL statement for auditing.
+- Add row-level security if the backing store supports it.
+
+---
+
+## Deployment on Streamlit Community Cloud
+
+1. Push the repository to GitHub (must be public for the free tier).
+2. Go to <https://share.streamlit.io> and click **New app**.
+3. Select the repository, branch `main`, and main file `app.py`.
+4. Under **Advanced settings → Secrets**, add:
+
+   ```toml
+   GROQ_API_KEY  = "gsk_..."
+   GROQ_API_BASE = "https://api.groq.com/openai/v1"
+   GROQ_MODEL    = "openai/gpt-oss-120b"
+   ```
+
+5. Ensure `data/sample_store.db` is committed (it is force-added by `.gitignore` bypass):
+
    ```bash
    git add -f data/sample_store.db
    git commit -m "chore: ship pre-seeded demo database"
    git push
    ```
-6. Click **Deploy**. Share the URL. 🎉
+
+6. Click **Deploy**. The app will be available at
+   `https://sql-bi-agent-<username>.streamlit.app`.
 
 ---
 
-## 🛠️ Customization
+## Customization
 
 | What | Where |
 |------|-------|
-| Point at your own DB | Change `DB_PATH` in `src/database.py`. |
-| Different LLM provider | Set the *Base URL* field in the sidebar (Ollama, vLLM, Azure, …). |
-| Chart heuristics | `auto_chart()` and `classify_columns()` in `src/agent.py`. |
-| Guardrail rules | `FORBIDDEN_KEYWORDS` and `validate_sql()` in `src/guardrails.py`. |
-| Prompt / few-shot examples | `SYSTEM_PROMPT` in `src/agent.py`. |
+| Point at a different database | Change `DB_PATH` in `src/database.py`. |
+| Change LLM provider | Select it in the sidebar; the base URL and model auto-fill. |
+| Tune chart selection | `auto_chart()` and `classify_columns()` in `src/agent.py`. |
+| Adjust guardrail rules | `FORBIDDEN_KEYWORDS` and `validate_sql()` in `src/guardrails.py`. |
+| Edit the system prompt | `SYSTEM_PROMPT` in `src/agent.py`. |
 
 ---
 
-## 🧑‍💻 Development
+## Development
 
 ```bash
-ruff check .            # lint
-python -m compileall .  # syntax check
-python init_db.py       # rebuild the demo DB
+ruff check .              # lint
+ruff format .             # format
+python -m compileall .    # syntax check
+python init_db.py         # rebuild the demo database
 ```
+
+The GitHub Actions workflow runs `ruff check` and a byte-compile on every push to `main`.
 
 ---
 
-## 📜 License
+## License
 
-MIT — use it, fork it, ship it.
+MIT. See [LICENSE](LICENSE) for details.
