@@ -9,6 +9,7 @@ Run with:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from datetime import datetime
@@ -19,6 +20,12 @@ import streamlit as st
 from src.agent import BRAND_COLORS, auto_chart, build_llm, generate_sql
 from src.database import DB_PATH, get_schema, run_query
 from src.guardrails import validate_sql
+
+# =============================================================================
+# Logging
+# =============================================================================
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Constants
@@ -120,7 +127,6 @@ CSS = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-/* Streamlit internal variables — dark */
 :root, html, body, .stApp {{
     --primary-color: {T['accent']};
     --background-color: {T['bg']};
@@ -153,7 +159,6 @@ CSS = f"""
     --radius: 12px;
     --radius-sm: 8px;
 
-    /* glide-data-grid */
     --gdg-accent-color: {T['accent']};
     --gdg-accent-fg: {T['accent_fg']};
     --gdg-accent-light: {T['accent_soft']};
@@ -182,7 +187,6 @@ CSS = f"""
     --gdg-editor-font-size: 12px;
 }}
 
-/* ================== GLOBAL ================== */
 html, body, [class*="css"] {{
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-feature-settings: 'cv02','cv03','cv04','cv11';
@@ -195,15 +199,12 @@ html, body, [class*="css"] {{
     color: var(--text);
 }}
 
-/* ================== CHROME ================== */
 #MainMenu {{ visibility: hidden; }}
 [data-testid="stDecoration"] {{ display: none !important; }}
 [data-testid="stStatusWidget"] {{ visibility: hidden !important; }}
 [data-testid="stToolbarActions"],
 [data-testid="stDeployButton"],
-[data-testid="stAppDeployButton"] {{
-    display: none !important;
-}}
+[data-testid="stAppDeployButton"] {{ display: none !important; }}
 header[data-testid="stHeader"] {{
     background: transparent !important;
     box-shadow: none !important;
@@ -211,7 +212,6 @@ header[data-testid="stHeader"] {{
     overflow: visible !important;
 }}
 
-/* ================== SIDEBAR ================== */
 [data-testid="stSidebar"] {{
     background: var(--bg-elev) !important;
     border-right: 1px solid var(--border) !important;
@@ -233,7 +233,6 @@ header[data-testid="stHeader"] {{
     margin-right: auto !important;
     order: 0 !important;
 }}
-
 [data-testid="stSidebarCollapseButton"] button {{
     background: var(--bg-elev-2) !important;
     border: 1px solid var(--border) !important;
@@ -252,7 +251,6 @@ header[data-testid="stHeader"] {{
     color: inherit !important;
 }}
 
-/* Reopen (›) button */
 [data-testid="stSidebarCollapsedControl"],
 [data-testid="collapsedControl"],
 [data-testid="stSidebarCollapsedControlButton"] {{
@@ -306,7 +304,6 @@ button[kind="header"], button[kind="headerNoPadding"] {{
     pointer-events: auto !important;
 }}
 
-/* Sidebar brand */
 .sidebar-brand {{
     display: flex; align-items: center; gap: 8px;
     margin: 0 0 6px 0; line-height: 1.2;
@@ -318,10 +315,7 @@ button[kind="header"], button[kind="headerNoPadding"] {{
     color: #fff; flex-shrink: 0;
     box-shadow: 0 6px 18px var(--accent-glow);
 }}
-.sidebar-brand .logo svg {{
-    width: 22px !important;
-    height: 22px !important;
-}}
+.sidebar-brand .logo svg {{ width: 22px !important; height: 22px !important; }}
 .sidebar-brand .name {{
     font-weight: 700; font-size: 19px; line-height: 1.15;
     letter-spacing: -0.02em;
@@ -341,7 +335,6 @@ button[kind="header"], button[kind="headerNoPadding"] {{
     margin: 8px 0;
 }}
 
-/* Sidebar expanders */
 [data-testid="stSidebar"] [data-testid="stExpander"] {{
     margin-bottom: 6px !important;
     background: var(--bg-elev-2) !important;
@@ -358,14 +351,12 @@ button[kind="header"], button[kind="headerNoPadding"] {{
     margin-bottom: 4px !important;
 }}
 
-/* ================== MAIN CONTENT ================== */
 .block-container {{
     padding: 2rem 2.5rem 10rem 2.5rem !important;
     max-width: 1080px !important;
     margin: 0 auto !important;
 }}
 
-/* ================== TEXT INPUTS ================== */
 .stTextInput [data-baseweb="input"],
 .stTextInput [data-testid="stTextInputRootElement"] {{
     background: var(--bg-elev-2) !important;
@@ -414,7 +405,6 @@ button[kind="header"], button[kind="headerNoPadding"] {{
     fill: currentColor !important;
 }}
 
-/* ================== SELECTBOX ================== */
 .stSelectbox [data-baseweb="select"],
 .stSelectbox [data-baseweb="select"] > div,
 .stSelectbox [data-baseweb="select"] > div > div,
@@ -450,7 +440,6 @@ button[kind="header"], button[kind="headerNoPadding"] {{
     font-weight: 500 !important;
 }}
 
-/* Dropdown popover */
 [data-baseweb="popover"],
 [data-baseweb="popover"] > div,
 [data-baseweb="popover"] [data-baseweb="menu"],
@@ -478,7 +467,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     color: var(--accent) !important;
 }}
 
-/* ================== SLIDER ================== */
 [data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"] {{
     background-color: var(--accent) !important;
     border-color: var(--accent) !important;
@@ -491,11 +479,9 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     color: var(--text-dim) !important;
 }}
 
-/* ================== TOOLTIP ================== */
 [data-testid="stTooltipIcon"] svg {{ fill: var(--text-mute) !important; }}
 [data-testid="stTooltipIcon"]:hover svg {{ fill: var(--accent) !important; }}
 
-/* ================== BUTTONS ================== */
 .stButton > button {{
     background: var(--bg-elev-2) !important;
     border: 1px solid var(--border) !important;
@@ -527,7 +513,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     box-shadow: 0 10px 26px var(--accent-glow);
 }}
 
-/* ================== HERO ================== */
 .hero {{ margin-bottom: 24px; }}
 .hero .badge {{
     display: inline-flex; align-items: center; gap: 6px;
@@ -558,7 +543,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     margin: 0; max-width: 620px; line-height: 1.55;
 }}
 
-/* ================== EMPTY STATE ================== */
 .empty-wrap {{ padding: 30px 0 14px 0; text-align: center; }}
 .empty-icon {{
     display: inline-flex; align-items: center; justify-content: center;
@@ -579,7 +563,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     text-align: left; margin-bottom: 8px; padding-left: 2px;
 }}
 
-/* ================== FOLLOW-UP CHIPS ================== */
 .followup-wrap {{
     margin-top: 14px;
     padding-top: 14px;
@@ -609,7 +592,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     color: var(--accent) !important;
 }}
 
-/* ================== CHAT ================== */
 [data-testid="stChatMessage"] {{
     background: transparent !important;
     border: none !important;
@@ -630,7 +612,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     border-color: var(--accent-glow) !important;
 }}
 
-/* ================== CHAT INPUT ================== */
 [data-testid="stBottom"] {{
     bottom: var(--footer-h) !important;
     background: {T['chatbar_fade']} !important;
@@ -675,7 +656,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
 }}
 [data-testid="stChatInput"] button svg {{ fill: currentColor !important; }}
 
-/* ================== METRICS ================== */
 .metrics-strip {{
     display: grid; grid-template-columns: repeat(3, 1fr);
     gap: 10px; margin: 12px 0 14px 0;
@@ -699,7 +679,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
 .metric-cell .value.accent {{ color: var(--accent); }}
 .metric-cell .value.success {{ color: var(--success); }}
 
-/* ================== EXPANDER ================== */
 [data-testid="stExpander"] {{
     background: var(--bg-elev) !important;
     border: 1px solid var(--border) !important;
@@ -737,7 +716,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     border-top: 1px solid var(--border) !important;
 }}
 
-/* ================== CODE BLOCK ================== */
 [data-testid="stCodeBlock"],
 [data-testid="stCodeBlock"] > div,
 [data-testid="stCodeBlock"] > div > div,
@@ -765,7 +743,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     background-color: transparent !important;
 }}
 
-/* ================== DATAFRAME ================== */
 [data-testid="stDataFrame"],
 [data-testid="stDataFrame"] > div,
 [data-testid="stDataFrame"] [data-testid="stDataFrameResizable"],
@@ -790,7 +767,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     border-color: var(--border) !important;
 }}
 
-/* ================== ALERTS ================== */
 .stAlert {{
     background: var(--bg-elev) !important;
     border: 1px solid var(--border) !important;
@@ -800,13 +776,11 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
 
 .stSpinner > div {{ border-top-color: var(--accent) !important; }}
 
-/* ================== SCROLLBAR ================== */
 ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
 ::-webkit-scrollbar-track {{ background: transparent; }}
 ::-webkit-scrollbar-thumb {{ background: var(--border-2); border-radius: 8px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: var(--accent); }}
 
-/* ================== STATUS PILL ================== */
 .status-pill {{
     display: inline-flex; align-items: center; gap: 6px;
     padding: 5px 9px;
@@ -826,7 +800,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     background: currentColor;
 }}
 
-/* History rows */
 .hist-row {{
     display: flex; flex-direction: column; gap: 2px;
     padding: 6px 0;
@@ -841,7 +814,6 @@ ul[data-testid="stSelectboxVirtualDropdown"] {{
     font-size: 10px; color: var(--text-mute);
 }}
 
-/* ================== FOOTER ================== */
 .app-footer {{
     position: fixed;
     left: 0;
@@ -897,7 +869,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 # Icons
 # =============================================================================
 ICON_LOGO = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" '
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" '
     'fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" '
     'stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>'
 )
@@ -938,10 +910,20 @@ ICON_INSTAGRAM = (
 # Helpers
 # =============================================================================
 def _secret(name: str, default: str = "") -> str:
+    """Safely read a value from st.secrets.
+
+    Streamlit raises different error types depending on the environment:
+    - KeyError when the key is missing
+    - FileNotFoundError when no secrets.toml exists
+    - StreamlitSecretNotFoundError on some Streamlit versions
+    We handle them all and fall back to the supplied default.
+    """
     try:
-        return st.secrets[name]
-    except Exception:
+        value = st.secrets[name]
+    except (KeyError, FileNotFoundError, Exception) as exc:  # noqa: BLE001
+        logger.debug("Secret '%s' not available: %s", name, exc)
         return default
+    return value if isinstance(value, str) else default
 
 
 def _on_provider_change() -> None:
@@ -976,10 +958,21 @@ def _resolve_credentials() -> tuple[str, str, str]:
 
 def suggest_followups(api_key: str, model: str, base_url: str | None,
                       question: str, sql: str, df) -> list[str]:
+    """Best-effort LLM call for follow-up question suggestions.
+
+    Failure here should never break the main answer — we return an empty
+    list on any problem and log the reason for debugging.
+    """
     if df is None or df.empty:
         return []
+
     try:
         from langchain_core.messages import HumanMessage
+    except ImportError as exc:
+        logger.debug("LangChain not installed — skipping follow-ups: %s", exc)
+        return []
+
+    try:
         llm = build_llm(api_key=api_key, model=model, base_url=base_url)
         cols = ", ".join(map(str, df.columns.tolist()[:8]))
         prompt = (
@@ -1000,7 +993,8 @@ def suggest_followups(api_key: str, model: str, base_url: str | None,
             for ln in text.splitlines()
         ]
         return [ln for ln in lines if ln and len(ln) < 100][:3]
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — LLM errors are unpredictable
+        logger.debug("Follow-up generation failed: %s", exc)
         return []
 
 
@@ -1170,7 +1164,8 @@ def process_question(prompt: str, api_key: str, model: str,
                     "sql": safe_sql, "df": df, "elapsed": elapsed,
                     "suggestions": suggestions,
                 })
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 — top-level app handler
+                logger.exception("Failed to process question")
                 st.error(f"{type(exc).__name__}: {exc}")
                 st.session_state.messages.append(
                     {"role": "assistant", "content": f"Error: {exc}"})
@@ -1194,12 +1189,7 @@ def render_footer() -> None:
 
 
 def _reset_settings() -> None:
-    """Reset button callback.
-
-    Runs BEFORE widgets are re-instantiated on the next rerun, so it is
-    safe to overwrite widget-backed keys like `provider`, `model`, etc.
-    Messages and query history are preserved.
-    """
+    """Reset button callback — runs before widgets re-instantiate."""
     for k, v in _DEFAULTS.items():
         if k not in ("messages", "query_history"):
             st.session_state[k] = v
@@ -1209,7 +1199,6 @@ def _reset_settings() -> None:
 # Sidebar
 # =============================================================================
 with st.sidebar:
-    # --- Brand (no theme toggle) ---
     st.markdown(
         '<div class="sidebar-brand">'
         f'<div class="logo">{ICON_LOGO}</div>'
@@ -1338,7 +1327,7 @@ with st.sidebar:
             key="export_session_json",
         )
 
-        st.button(
+    st.button(
         ":material/restart_alt: Reset settings",
         use_container_width=True,
         key="reset_settings_btn",

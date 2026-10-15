@@ -4,6 +4,7 @@ and one-shot initialization/seed for the demo SQLite database.
 """
 from __future__ import annotations
 
+import logging
 import random
 import sqlite3
 from datetime import datetime, timedelta
@@ -12,16 +13,12 @@ from typing import Final
 
 import pandas as pd
 
-# ---------------------------------------------------------------------------
-# Paths (project root = parent of `src/`)
-# ---------------------------------------------------------------------------
+logger = logging.getLogger(__name__)
+
 PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
 DATA_DIR: Final[Path] = PROJECT_ROOT / "data"
 DB_PATH: Final[Path] = DATA_DIR / "sample_store.db"
 
-# ---------------------------------------------------------------------------
-# Schema
-# ---------------------------------------------------------------------------
 SCHEMA: Final[str] = """
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS products;
@@ -58,9 +55,6 @@ CREATE INDEX idx_orders_product  ON orders(product_id);
 CREATE INDEX idx_orders_date     ON orders(order_date);
 """
 
-# ---------------------------------------------------------------------------
-# Seed data
-# ---------------------------------------------------------------------------
 COUNTRIES = ["USA", "USA", "USA", "Germany", "France", "UK",
              "Canada", "Australia", "Japan", "Brazil"]
 FIRST = ["Alice", "Bob", "Carlos", "Diana", "Ethan", "Fatima", "Grace",
@@ -95,11 +89,8 @@ PRODUCTS = [
 STATUSES = ["completed", "completed", "completed", "shipped", "pending", "cancelled"]
 
 
-# ---------------------------------------------------------------------------
-# Initialization
-# ---------------------------------------------------------------------------
 def initialize_database(db_path: Path = DB_PATH, seed: int = 42) -> Path:
-    """Create + seed the SQLite database. Idempotent (drops existing tables)."""
+    """Create + seed the SQLite database. Idempotent."""
     random.seed(seed)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if db_path.exists():
@@ -110,7 +101,6 @@ def initialize_database(db_path: Path = DB_PATH, seed: int = 42) -> Path:
         cur = conn.cursor()
         cur.executescript(SCHEMA)
 
-        # customers
         start = datetime(2022, 1, 1)
         customers = [
             (
@@ -127,7 +117,6 @@ def initialize_database(db_path: Path = DB_PATH, seed: int = 42) -> Path:
             "VALUES (?, ?, ?, ?, ?)", customers,
         )
 
-        # products
         products = [
             (i + 1, name, cat, price)
             for i, (name, cat, price) in enumerate(PRODUCTS)
@@ -137,7 +126,6 @@ def initialize_database(db_path: Path = DB_PATH, seed: int = 42) -> Path:
             "VALUES (?, ?, ?, ?)", products,
         )
 
-        # orders
         start = datetime(2023, 1, 1)
         orders = [
             (
@@ -162,9 +150,6 @@ def initialize_database(db_path: Path = DB_PATH, seed: int = 42) -> Path:
     return db_path
 
 
-# ---------------------------------------------------------------------------
-# Introspection & querying
-# ---------------------------------------------------------------------------
 def get_schema(db_path: Path = DB_PATH) -> str:
     """Return a human/LLM-readable description of the SQLite schema."""
     conn = sqlite3.connect(db_path)
@@ -188,8 +173,8 @@ def get_schema(db_path: Path = DB_PATH) -> str:
                     chunks.append("  Sample rows:")
                     for _, row in sample.iterrows():
                         chunks.append(f"    {row.to_dict()}")
-            except Exception:
-                pass
+            except (pd.errors.DatabaseError, ValueError) as exc:
+                logger.debug("Could not fetch sample rows for %s: %s", table, exc)
             chunks.append("")
         return "\n".join(chunks)
     finally:

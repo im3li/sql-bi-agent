@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from src.database import DB_PATH, initialize_database
+from src.database import initialize_database
 
 
 def main() -> None:

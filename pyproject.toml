@@ -1,0 +1,28 @@
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "venvsource",
+    "__pycache__",
+    "data",
+    "assets",
+]
+
+[tool.ruff.lint]
+# Keep the useful stuff, skip over-strict rules for this app
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",   # line-too-long — handled by ruff format
+    "E402",   # module-level import not at top (Streamlit pattern)
+    "W291",   # trailing whitespace
+    "W293",   # whitespace on blank line
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Allow broad exception handling in the app — library errors are unpredictable
+"app.py" = ["BLE001", "S110"]
+"src/agent.py" = ["BLE001", "S110"]
+"src/database.py" = ["BLE001", "S110"]

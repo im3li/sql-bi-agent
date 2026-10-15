@@ -1,11 +1,9 @@
 """
 LLM text-to-SQL agent and automatic Plotly chart selection.
-
-Charts use a fixed brand palette so every visualization feels part of the
-same product.
 """
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -14,18 +12,14 @@ import plotly.express as px
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
-# Brand palette — cohesive indigo → violet → emerald → amber → sky → rose
+# Brand palette
 # ---------------------------------------------------------------------------
 BRAND_COLORS = [
-    "#7c8aff",  # indigo
-    "#a78bfa",  # violet
-    "#34d399",  # emerald
-    "#fbbf24",  # amber
-    "#38bdf8",  # sky
-    "#f472b6",  # rose
-    "#818cf8",  # periwinkle
-    "#2dd4bf",  # teal
+    "#7c8aff", "#a78bfa", "#34d399", "#fbbf24",
+    "#38bdf8", "#f472b6", "#818cf8", "#2dd4bf",
 ]
 
 # ---------------------------------------------------------------------------
@@ -88,14 +82,13 @@ def generate_sql(
 
 
 # ---------------------------------------------------------------------------
-# Automatic chart selection
+# Chart helpers
 # ---------------------------------------------------------------------------
 def classify_columns(df: pd.DataFrame) -> tuple[list[str], list[str], list[str]]:
     """Return (numeric_cols, date_cols, categorical_cols)."""
     numeric, dates, cats = [], [], []
     for col in df.columns:
         series = df[col]
-        # Treat ID-like columns as categorical, not metrics
         if re.search(r"(^|_)id$", col, re.IGNORECASE):
             cats.append(col)
             continue
@@ -104,11 +97,15 @@ def classify_columns(df: pd.DataFrame) -> tuple[list[str], list[str], list[str]]
         elif pd.api.types.is_datetime64_any_dtype(series):
             dates.append(col)
         elif re.search(r"date|time|month|year|day", col, re.IGNORECASE):
+            # Try to interpret as datetime. pd.to_datetime raises
+            # ValueError/TypeError on unparsable input — we catch only those
+            # specific types and log the reason.
             try:
                 pd.to_datetime(series)
                 dates.append(col)
                 continue
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as exc:
+                logger.debug("Column %s could not be parsed as datetime: %s", col, exc)
                 cats.append(col)
         else:
             cats.append(col)
@@ -116,7 +113,12 @@ def classify_columns(df: pd.DataFrame) -> tuple[list[str], list[str], list[str]]
 
 
 def auto_chart(df: pd.DataFrame):
-    """Pick a sensible Plotly chart from the shape of the result set."""
+    """Pick a sensible Plotly chart from the shape of the result set.
+
+    Returns a Plotly figure or None. Plotly itself can raise a variety of
+    exceptions depending on the data — we catch broad exceptions here and
+    log them so a bad chart never breaks the whole answer.
+    """
     if df is None or df.empty or len(df.columns) < 2 or len(df) < 2:
         return None
 
@@ -127,10 +129,9 @@ def auto_chart(df: pd.DataFrame):
     for d in dates:
         try:
             df[d] = pd.to_datetime(df[d])
-        except Exception:
-            pass
+        except (ValueError, TypeError) as exc:
+            logger.debug("Failed to coerce column %s to datetime: %s", d, exc)
 
-    # Consistent look across every chart
     common_layout = dict(
         colorway=BRAND_COLORS,
         font=dict(family="Inter, sans-serif", size=12),
@@ -139,7 +140,6 @@ def auto_chart(df: pd.DataFrame):
     )
 
     try:
-        # 1) Time series → line chart
         if dates:
             fig = px.line(
                 df, x=dates[0], y=numeric, markers=True,
@@ -150,7 +150,6 @@ def auto_chart(df: pd.DataFrame):
                               legend_title_text="")
             return fig
 
-        # 2) Categorical + numeric → bar chart
         if cats and numeric:
             x = cats[0]
             if len(numeric) == 1:
@@ -173,7 +172,6 @@ def auto_chart(df: pd.DataFrame):
                 fig.update_layout(**common_layout)
             return fig
 
-        # 3) Two numerics → scatter
         if len(numeric) >= 2:
             fig = px.scatter(
                 df, x=numeric[0], y=numeric[1],
@@ -185,14 +183,14 @@ def auto_chart(df: pd.DataFrame):
             fig.update_layout(**common_layout)
             return fig
 
-        # 4) Single numeric with an index → line
         if len(numeric) == 1:
             fig = px.line(df, y=numeric[0], title=numeric[0],
                           color_discrete_sequence=BRAND_COLORS)
             fig.update_traces(line=dict(color=BRAND_COLORS[0]))
             fig.update_layout(**common_layout)
             return fig
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — Plotly failures are unpredictable
+        logger.debug("auto_chart failed: %s", exc)
         return None
 
     return None
