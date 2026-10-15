@@ -1,0 +1,32 @@
+# Virtual environments
+venv/
+.venv/
+env/
+venvsource/    
+
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets
+.env
+.streamlit/secrets.toml
+
+# SQLite artifacts
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
+
+venvsource/
